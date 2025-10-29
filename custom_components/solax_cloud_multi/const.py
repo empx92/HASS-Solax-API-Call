@@ -7,7 +7,7 @@ CONF_TOKEN = "token_id"
 CONF_DEVICES = "devices"          # list of dicts: {wifi_sn,name,battery_kwh}
 CONF_SCAN_INTERVAL = "scan_interval"
 
-DEFAULT_SCAN_INTERVAL = 15  # seconds
+DEFAULT_SCAN_INTERVAL = 60  # seconds
 
 API_URL = "https://www.solaxcloud.com/api/v2/dataAccess/realtimeInfo/get"
 API_TIMEOUT = 20

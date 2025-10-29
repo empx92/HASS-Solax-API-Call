@@ -9,6 +9,7 @@ from typing import Any
 
 from aiohttp import ClientError
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.config_entries import ConfigEntry
 
@@ -45,7 +46,7 @@ class SolaxCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]] ]):
 
     async def _async_update_data(self) -> dict[str, dict[str, Any]]:
         """Return a mapping wifi_sn -> result dict."""
-        session = self.hass.helpers.aiohttp_client.async_get_clientsession()
+        session = async_get_clientsession(self.hass)
         headers = {"Content-Type": "application/json", "tokenId": self._token}
 
         async def fetch_one(wifi_sn: str) -> tuple[str, dict[str, Any] | None]:
