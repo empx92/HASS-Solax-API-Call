@@ -1,0 +1,10 @@
+{
+  "name": "SolaX Cloud (Multi)",
+  "render_readme": true,
+  "domains": [
+    "sensor"
+  ],
+  "country": "AT",
+  "homeassistant": "2024.6.0",
+  "iot_class": "Cloud Polling"
+}

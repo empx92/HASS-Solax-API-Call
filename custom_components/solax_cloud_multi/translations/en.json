@@ -1,0 +1,46 @@
+{
+  "title": "SolaX Cloud (Multi)",
+  "config": {
+    "step": {
+      "user": {
+        "title": "SolaX Cloud",
+        "description": "Enter your API token (tokenId) from SolaX Cloud.",
+        "data": {
+          "token_id": "tokenId"
+        }
+      }
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "SolaX: Options",
+        "menu_options": {
+          "add_device": "Add device",
+          "remove_device": "Remove device",
+          "set_options": "Polling & options"
+        }
+      },
+      "add_device": {
+        "title": "Add device",
+        "data": {
+          "wifi_sn": "WiFi SN",
+          "name": "Display name",
+          "battery_kwh": "Battery size (kWh)"
+        }
+      },
+      "remove_device": {
+        "title": "Remove device",
+        "data": {
+          "wifi_sn": "WiFi SN"
+        }
+      },
+      "set_options": {
+        "title": "General options",
+        "data": {
+          "scan_interval": "Scan interval (sec)"
+        }
+      }
+    }
+  }
+}

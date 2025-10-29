@@ -1,0 +1,53 @@
+
+title: SolaX Übersicht
+type: vertical-stack
+cards:
+  - type: markdown
+    content: |
+      # SolaX Cloud – Live
+      Gemeinsamer tokenId, mehrere Geräte (wifiSn). Werte aktualisieren sich automatisch.
+
+  - type: custom:auto-entities
+    card:
+      type: horizontal-stack
+    filter:
+      include:
+        - domain: sensor
+          attributes:
+            device_class: battery
+          name: /.* Battery SoC$/
+      exclude:
+        - state: "unknown"
+        - state: "unavailable"
+
+  - type: custom:auto-entities
+    card:
+      type: entities
+      title: Batterie-ETA
+    filter:
+      include:
+        - domain: sensor
+          name: /.* Battery ETA$/
+
+  - type: custom:auto-entities
+    card:
+      type: entities
+      title: Leistungen (W)
+    filter:
+      include:
+        - domain: sensor
+          device_class: power
+          name: /.*(Feed-in Power|AC Power|Battery Power)$/
+    sort:
+      method: name
+
+  - type: custom:auto-entities
+    card:
+      type: entities
+      title: Batterie-Temperatur & -Zyklen
+    filter:
+      include:
+        - domain: sensor
+          name: /.* Battery Temperature$/
+        - domain: sensor
+          name: /.* Battery Cycles$/

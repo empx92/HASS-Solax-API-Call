@@ -1,0 +1,13 @@
+{
+  "domain": "solax_cloud_multi",
+  "name": "SolaX Cloud (Multi)",
+  "version": "1.0.0",
+  "documentation": "https://github.com/empx92/homeassistant-solax-cloud-multi",
+  "requirements": [],
+  "codeowners": [
+    "@empx92"
+  ],
+  "integration_type": "hub",
+  "iot_class": "cloud_polling",
+  "loggers": []
+}
