@@ -1,7 +1,7 @@
 {
   "domain": "solax_cloud_multi",
   "name": "SolaX Cloud (Multi)",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "documentation": "https://github.com/empx92/HASS-Solax-API-Call",
   "requirements": [],
   "codeowners": [

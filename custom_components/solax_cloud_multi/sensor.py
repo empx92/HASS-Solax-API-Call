@@ -15,7 +15,6 @@ from .coordinator import SolaxCoordinator
 
 PARALLEL_UPDATES = 0
 
-# thresholds for charge/discharge and reserve
 CHARGE_THRESHOLD_W = 50.0
 DISCHARGE_THRESHOLD_W = -50.0
 RESERVE_SOC = 10.0
@@ -33,6 +32,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
             entities.append(SolaxValueSensor(coordinator, wifi_sn, name, key, meta))
 
         entities.append(SolaxEtaMinutesSensor(coordinator, wifi_sn, name, battery_kwh))
+        entities.append(SolaxEtaToFullMinutesSensor(coordinator, wifi_sn, name, battery_kwh))
         entities.append(SolaxEtaTextSensor(coordinator, wifi_sn, name, battery_kwh))
 
     async_add_entities(entities, update_before_add=True)
@@ -59,7 +59,7 @@ class SolaxBase(CoordinatorEntity[SolaxCoordinator], SensorEntity):
 class SolaxValueSensor(SolaxBase):
     def __init__(self, coordinator, wifi_sn, base_name, key, meta):
         super().__init__(coordinator, wifi_sn, base_name, key)
-        self._attr_name = f"{base_name} {meta['name']}"
+        self._attr_name = meta['name']
         self._attr_unique_id = f"{wifi_sn}_{key}"
         unit = meta["unit"]
         if unit == "W":
@@ -85,7 +85,7 @@ class SolaxEtaMinutesSensor(SolaxBase):
     def __init__(self, coordinator, wifi_sn, base_name, battery_kwh: float):
         super().__init__(coordinator, wifi_sn, base_name, "eta_minutes")
         self._battery_kwh = battery_kwh
-        self._attr_name = f"{base_name} Battery ETA (min)"
+        self._attr_name = "Battery ETA (min)"
         self._attr_unique_id = f"{wifi_sn}_eta_minutes"
 
     @property
@@ -105,11 +105,32 @@ class SolaxEtaMinutesSensor(SolaxBase):
             return None
         return max(0, round(hrs * 60))
 
+class SolaxEtaToFullMinutesSensor(SolaxBase):
+    _attr_native_unit_of_measurement = "min"
+    _attr_device_class = SensorDeviceClass.DURATION
+
+    def __init__(self, coordinator, wifi_sn, base_name, battery_kwh: float):
+        super().__init__(coordinator, wifi_sn, base_name, "eta_to_full_minutes")
+        self._battery_kwh = battery_kwh
+        self._attr_name = "Battery ETA to Full (min)"
+        self._attr_unique_id = f"{wifi_sn}_eta_to_full_min"
+
+    @property
+    def native_value(self):
+        soc = float(self._val("soc") or 0.0)
+        p = float(self._val("batPower") or 0.0)
+        cap = float(self._battery_kwh or 0.0)
+        if cap <= 0.0 or p <= CHARGE_THRESHOLD_W or soc >= 100.0:
+            return None
+        fehl_kwh = cap * (100.0 - soc) / 100.0
+        mins = max(0, round((fehl_kwh / (p / 1000.0)) * 60))
+        return mins
+
 class SolaxEtaTextSensor(SolaxBase):
     def __init__(self, coordinator, wifi_sn, base_name, battery_kwh: float):
         super().__init__(coordinator, wifi_sn, base_name, "eta_text")
         self._battery_kwh = battery_kwh
-        self._attr_name = f"{base_name} Battery ETA"
+        self._attr_name = "Battery ETA"
         self._attr_unique_id = f"{wifi_sn}_eta_text"
 
     @property

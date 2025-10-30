@@ -6,7 +6,7 @@
         "title": "SolaX Cloud",
         "description": "Gib deinen API-Token (tokenId) ein.",
         "data": {
-          "token_id": "tokenId"
+          "token_id": "TokenId"
         }
       }
     }

@@ -50,8 +50,6 @@ class SolaxCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]] ]):
 
         async def fetch_one(wifi_sn: str) -> tuple[str, dict[str, Any] | None]:
             payload = json.dumps({"wifiSn": wifi_sn})
-
-            # simple retry/backoff: 3 attempts
             for attempt in range(3):
                 try:
                     async with session.post(API_URL, headers=headers, data=payload, timeout=API_TIMEOUT) as resp:
@@ -60,16 +58,13 @@ class SolaxCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]] ]):
                             res = data.get("result") or {}
                             filtered = {k: res.get(k) for k in KEYS}
                             return wifi_sn, filtered
-                        _LOGGER.warning("Bad response for %s (try %s): %s", wifi_sn, attempt+1, data)
-                except (ClientError, asyncio.TimeoutError) as exc:
-                    _LOGGER.warning("Request error %s (try %s): %s", wifi_sn, attempt+1, exc)
-                await asyncio.sleep(1 + attempt)  # backoff
-
+                except (ClientError, asyncio.TimeoutError):
+                    pass
+                await asyncio.sleep(1 + attempt)
             raise UpdateFailed(f"Failed to fetch after retries: {wifi_sn}")
 
         devices = [d.get("wifi_sn") for d in self.devices if d.get("wifi_sn")]
         if not devices:
-            _LOGGER.debug("No devices configured for %s", DOMAIN)
             return {}
         results: dict[str, dict[str, Any]] = {}
         fetched = await asyncio.gather(*(fetch_one(sn) for sn in devices))

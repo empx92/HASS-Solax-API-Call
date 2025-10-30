@@ -37,8 +37,6 @@ class SolaxConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     async def async_step_user(self, user_input: dict[str, Any] | None = None):
         if user_input is None:
             return self.async_show_form(step_id="user", data_schema=STEP_USER_SCHEMA)
-        await self.async_set_unique_id("solax_cloud_multi_singleton")
-        self._abort_if_unique_id_configured()
         return self.async_create_entry(title="SolaX Cloud (Multi)", data={CONF_TOKEN: user_input[CONF_TOKEN]})
 
     @staticmethod
