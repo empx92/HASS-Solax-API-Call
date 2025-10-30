@@ -1,2 +1,3 @@
 # SolaX Cloud (Multi)
-Friendly names, numeric ETA.
+
+Custom integration with multi-device polling and ETA sensors.
