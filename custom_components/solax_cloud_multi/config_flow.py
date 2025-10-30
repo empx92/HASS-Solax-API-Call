@@ -71,11 +71,7 @@ class SolaxOptionsFlow(config_entries.OptionsFlow):
         if user_input is not None:
             devices = self._devices
             devices.append(
-                {
-                    "wifi_sn": user_input["wifi_sn"],
-                    "name": user_input.get("name") or user_input["wifi_sn"],
-                    "battery_kwh": user_input["battery_kwh"],
-                }
+                {"wifi_sn": user_input["wifi_sn"], "name": user_input.get("name") or user_input["wifi_sn"], "battery_kwh": user_input["battery_kwh"]}
             )
             options = dict(self.entry.options)
             options[CONF_DEVICES] = devices

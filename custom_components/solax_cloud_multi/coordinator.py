@@ -9,9 +9,9 @@ from typing import Any
 
 from aiohttp import ClientError
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .const import (
     DOMAIN,
@@ -45,26 +45,34 @@ class SolaxCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]] ]):
         return list(self.entry.options.get(CONF_DEVICES, []))
 
     async def _async_update_data(self) -> dict[str, dict[str, Any]]:
-        """Return a mapping wifi_sn -> result dict."""
         session = async_get_clientsession(self.hass)
         headers = {"Content-Type": "application/json", "tokenId": self._token}
 
         async def fetch_one(wifi_sn: str) -> tuple[str, dict[str, Any] | None]:
             payload = json.dumps({"wifiSn": wifi_sn})
-            try:
-                async with session.post(API_URL, headers=headers, data=payload, timeout=API_TIMEOUT) as resp:
-                    data = await resp.json(content_type=None)
-            except (ClientError, asyncio.TimeoutError) as exc:
-                raise UpdateFailed(f"Request error {wifi_sn}: {exc}") from exc
-            if not isinstance(data, dict) or not data.get("success") or "result" not in data:
-                raise UpdateFailed(f"Bad response for {wifi_sn}: {data}")
-            res = data.get("result") or {}
-            filtered = {k: res.get(k) for k in KEYS}
-            return wifi_sn, filtered
 
-        tasks = [fetch_one(d.get("wifi_sn")) for d in self.devices if d.get("wifi_sn")]
+            # simple retry/backoff: 3 attempts
+            for attempt in range(3):
+                try:
+                    async with session.post(API_URL, headers=headers, data=payload, timeout=API_TIMEOUT) as resp:
+                        data = await resp.json(content_type=None)
+                        if isinstance(data, dict) and data.get("success") and "result" in data:
+                            res = data.get("result") or {}
+                            filtered = {k: res.get(k) for k in KEYS}
+                            return wifi_sn, filtered
+                        _LOGGER.warning("Bad response for %s (try %s): %s", wifi_sn, attempt+1, data)
+                except (ClientError, asyncio.TimeoutError) as exc:
+                    _LOGGER.warning("Request error %s (try %s): %s", wifi_sn, attempt+1, exc)
+                await asyncio.sleep(1 + attempt)  # backoff
+
+            raise UpdateFailed(f"Failed to fetch after retries: {wifi_sn}")
+
+        devices = [d.get("wifi_sn") for d in self.devices if d.get("wifi_sn")]
+        if not devices:
+            _LOGGER.debug("No devices configured for %s", DOMAIN)
+            return {}
         results: dict[str, dict[str, Any]] = {}
-        if tasks:
-            for wifi_sn, result in await asyncio.gather(*tasks):
-                results[wifi_sn] = result or {}
+        fetched = await asyncio.gather(*(fetch_one(sn) for sn in devices))
+        for wifi_sn, result in fetched:
+            results[wifi_sn] = result or {}
         return results

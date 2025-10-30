@@ -15,6 +15,11 @@ from .coordinator import SolaxCoordinator
 
 PARALLEL_UPDATES = 0
 
+# thresholds for charge/discharge and reserve
+CHARGE_THRESHOLD_W = 50.0
+DISCHARGE_THRESHOLD_W = -50.0
+RESERVE_SOC = 10.0
+
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback):
     coordinator: SolaxCoordinator = hass.data[DOMAIN][entry.entry_id]
     entities: list[SensorEntity] = []
@@ -24,11 +29,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
         name = device.get("name") or wifi_sn
         battery_kwh = float(device.get("battery_kwh", 0))
 
-        # basic sensors
         for key, meta in SENSOR_MAP.items():
             entities.append(SolaxValueSensor(coordinator, wifi_sn, name, key, meta))
 
-        # ETA sensors (minutes + text)
         entities.append(SolaxEtaMinutesSensor(coordinator, wifi_sn, name, battery_kwh))
         entities.append(SolaxEtaTextSensor(coordinator, wifi_sn, name, battery_kwh))
 
@@ -77,7 +80,6 @@ class SolaxValueSensor(SolaxBase):
         return self._val(self._kind)
 
 class SolaxEtaMinutesSensor(SolaxBase):
-    """Minutes until empty/full based on batPower and SoC."""
     _attr_native_unit_of_measurement = "min"
 
     def __init__(self, coordinator, wifi_sn, base_name, battery_kwh: float):
@@ -91,21 +93,19 @@ class SolaxEtaMinutesSensor(SolaxBase):
         soc = float(self._val("soc") or 0.0)
         p = float(self._val("batPower") or 0.0)
         cap = float(self._battery_kwh or 0.0)
-        if cap <= 0.0 or p == 0.0:
+        if cap <= 0.0:
             return None
-        if p < 0:
-            # discharge: energy until empty
-            e_kwh = (soc / 100.0) * cap
-            hrs = e_kwh / (abs(p) / 1000.0)
+        if p > CHARGE_THRESHOLD_W and soc < 100.0:
+            fehl_kwh = cap * (100.0 - soc) / 100.0
+            hrs = fehl_kwh / (p / 1000.0)
+        elif p < DISCHARGE_THRESHOLD_W and soc > RESERVE_SOC:
+            nutz_kwh = cap * (soc - RESERVE_SOC) / 100.0
+            hrs = nutz_kwh / (abs(p) / 1000.0)
         else:
-            # charge: energy until full
-            e_kwh = ((100.0 - soc) / 100.0) * cap
-            hrs = e_kwh / (p / 1000.0)
-        mins = max(0, round(hrs * 60))
-        return mins
+            return None
+        return max(0, round(hrs * 60))
 
 class SolaxEtaTextSensor(SolaxBase):
-    """Friendly string for ETA."""
     def __init__(self, coordinator, wifi_sn, base_name, battery_kwh: float):
         super().__init__(coordinator, wifi_sn, base_name, "eta_text")
         self._battery_kwh = battery_kwh
@@ -117,17 +117,16 @@ class SolaxEtaTextSensor(SolaxBase):
         soc = float(self._val("soc") or 0.0)
         p = float(self._val("batPower") or 0.0)
         cap = float(self._battery_kwh or 0.0)
-        if cap <= 0.0 or p == 0.0:
+        if cap <= 0.0:
             return "—"
-        if p < 0:
-            e_kwh = (soc / 100.0) * cap
-            hrs = e_kwh / (abs(p) / 1000.0)
-            mins = max(0, round(hrs * 60))
+        if p > CHARGE_THRESHOLD_W and soc < 100.0:
+            fehl_kwh = cap * (100.0 - soc) / 100.0
+            mins = max(0, round((fehl_kwh / (p / 1000.0)) * 60))
             h, m = divmod(mins, 60)
-            return f"Bis leer (~{round(soc)}% → 0%): {h}h {m:02d}m"
-        else:
-            e_kwh = ((100.0 - soc) / 100.0) * cap
-            hrs = e_kwh / (p / 1000.0)
-            mins = max(0, round(hrs * 60))
+            return f"Fertig in {h}h {m:02d}m"
+        elif p < DISCHARGE_THRESHOLD_W and soc > RESERVE_SOC:
+            nutz_kwh = cap * (soc - RESERVE_SOC) / 100.0
+            mins = max(0, round((nutz_kwh / (abs(p) / 1000.0)) * 60))
             h, m = divmod(mins, 60)
-            return f"Bis voll ({round(soc)}% → 100%): {h}h {m:02d}m"
+            return f"Leer in {h}h {m:02d}m"
+        return "—"
