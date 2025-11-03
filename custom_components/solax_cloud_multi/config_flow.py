@@ -13,7 +13,7 @@ from .const import (
     DOMAIN,
     CONF_TOKEN,
     CONF_DEVICES,
-    CONF_WIFI_SN,
+    CONF_WIFI_SN,        # ← RICHTIG: aus const.py
     CONF_NAME,
     CONF_SCAN_INTERVAL,
     CONF_USE_PREFIX,
@@ -52,7 +52,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
 
             if "add_device" in user_input:
                 devices.append({
-                    CONF_WIFI_SN: user_input["add_device"][CONF_WIFI_SN],
+                    CONF_WIFI_SN: user_input["add_device"][CONF_WIFI_SN],  # ← RICHTIG
                     CONF_NAME: user_input["add_device"][CONF_NAME],
                 })
 
