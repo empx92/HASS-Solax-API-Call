@@ -1,15 +1,26 @@
 """Coordinator for SolaX Cloud Multi."""
 from __future__ import annotations
 
-from datetime import timedelta
+import asyncio
 import logging
+from datetime import timedelta
+
+import aiohttp
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
+from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 
-from .const import DOMAIN, CONF_TOKEN, CONF_DEVICES, CONF_WIFI_SN, CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL, API_URL, API_TIMEOUT
-import aiohttp
+from .const import (
+    DOMAIN,
+    CONF_TOKEN,
+    CONF_DEVICES,
+    CONF_WIFI_SN,
+    CONF_SCAN_INTERVAL,
+    DEFAULT_SCAN_INTERVAL,
+    API_URL,
+    API_TIMEOUT,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
