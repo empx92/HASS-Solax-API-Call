@@ -1,19 +1,14 @@
 """Config flow for SolaX Cloud Multi."""
-from __future__ import annotations
-
 import voluptuous as vol
-from typing import Any
-
 from homeassistant import config_entries
 from homeassistant.data_entry_flow import FlowResult
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import callback
 
 from .const import (
     DOMAIN,
     CONF_TOKEN,
     CONF_DEVICES,
-    CONF_WIFI_SN,        # RICHTIG: aus deiner const.py
+    CONF_WIFI_SN,
     CONF_NAME,
     CONF_SCAN_INTERVAL,
     CONF_USE_PREFIX,
@@ -23,28 +18,27 @@ from .const import (
 class SolaxCloudMultiConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     VERSION = 1
 
-    async def async_step_user(self, user_input: dict[str, Any] | None = None) -> FlowResult:
+    async def async_step_user(self, user_input=None):
         if user_input is not None:
             await self.async_set_unique_id(user_input[CONF_TOKEN])
             self._abort_if_unique_id_configured()
             return self.async_create_entry(title="SolaX Cloud (Multi)", data=user_input)
 
-        schema = vol.Schema({vol.Required(CONF_TOKEN): str})
-        return self.async_show_form(step_id="user", data_schema=schema)
+        data_schema = vol.Schema({vol.Required(CONF_TOKEN): str})
+        return self.async_show_form(step_id="user", data_schema=data_schema)
 
     @staticmethod
-    @callback
-    def async_get_options_flow(config_entry: ConfigEntry) -> "OptionsFlowHandler":
+    def async_get_options_flow(config_entry):
         return OptionsFlowHandler(config_entry)
 
 
 class OptionsFlowHandler(config_entries.OptionsFlow):
-    def __init__(self, config_entry: ConfigEntry) -> None:
+    def __init__(self, config_entry: ConfigEntry):
         self.config_entry = config_entry
 
-    async def async_step_init(self, user_input: dict[str, Any] | None = None) -> FlowResult:
+    async def async_step_init(self, user_input=None):
         if user_input is not None:
-            devices = self.config_entry.options.get(CONF_DEVICES, [])[:]
+            devices = self.config_entry.options.get(CONF_DEVICES, [])
 
             if "add_device" in user_input:
                 devices.append({
@@ -60,7 +54,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
             return self.async_create_entry(title="", data=user_input)
 
         devices = self.config_entry.options.get(CONF_DEVICES, [])
-        device_names = {d[CONF_NAME]: d[CONF_NAME] for d in devices}
+        device_names = [d[CONF_NAME] for d in devices]
 
         schema = vol.Schema({
             vol.Optional(CONF_USE_PREFIX, default=False): bool,
@@ -75,7 +69,5 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
         return self.async_show_form(
             step_id="init",
             data_schema=schema,
-            description_placeholders={
-                "devices": ", ".join(d.get(CONF_NAME, "Unnamed") for d in devices) or "Keine"
-            }
+            description_placeholders={"devices": ", ".join(device_names) or "Keine"},
         )
