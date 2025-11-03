@@ -25,9 +25,7 @@ from .const import (
 _LOGGER = logging.getLogger(__name__)
 
 class SolaxDataUpdateCoordinator(DataUpdateCoordinator):
-    """Fetch data from SolaX API."""
-
-    def __init__(self, hass: HomeAssistant, entry: ConfigEntry) -> None:
+    def __init__(self, hass: HomeAssistant, entry: ConfigEntry):
         self.entry = entry
         update_interval = timedelta(seconds=entry.options.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL))
         super().__init__(hass, _LOGGER, name=DOMAIN, update_interval=update_interval)
@@ -53,7 +51,7 @@ class SolaxDataUpdateCoordinator(DataUpdateCoordinator):
                 data[sn] = result.get("result", {})
         return data
 
-    async def _fetch_device(self, session: aiohttp.ClientSession, token: str, wifi_sn: str):
+    async def _fetch_device(self, session, token, wifi_sn):
         headers = {"tokenId": token}
         payload = {"wifiSn": wifi_sn}
         async with session.post(API_URL, headers=headers, json=payload) as resp:
