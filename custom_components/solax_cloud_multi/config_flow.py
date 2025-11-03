@@ -13,7 +13,7 @@ from .const import (
     DOMAIN,
     CONF_TOKEN,
     CONF_DEVICES,
-    CONF_WIFI_SN,        # ← RICHTIG: aus const.py
+    CONF_WIFI_SN,        # RICHTIG: aus deiner const.py
     CONF_NAME,
     CONF_SCAN_INTERVAL,
     CONF_USE_PREFIX,
@@ -21,8 +21,6 @@ from .const import (
 )
 
 class SolaxCloudMultiConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
-    """Config flow."""
-
     VERSION = 1
 
     async def async_step_user(self, user_input: dict[str, Any] | None = None) -> FlowResult:
@@ -41,18 +39,16 @@ class SolaxCloudMultiConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
 
 class OptionsFlowHandler(config_entries.OptionsFlow):
-    """Options flow – Gerät hinzufügen/entfernen per Name."""
-
     def __init__(self, config_entry: ConfigEntry) -> None:
         self.config_entry = config_entry
 
     async def async_step_init(self, user_input: dict[str, Any] | None = None) -> FlowResult:
         if user_input is not None:
-            devices = self.config_entry.options.get(CONF_DEVICES, [])
+            devices = self.config_entry.options.get(CONF_DEVICES, [])[:]
 
             if "add_device" in user_input:
                 devices.append({
-                    CONF_WIFI_SN: user_input["add_device"][CONF_WIFI_SN],  # ← RICHTIG
+                    CONF_WIFI_SN: user_input["add_device"][CONF_WIFI_SN],
                     CONF_NAME: user_input["add_device"][CONF_NAME],
                 })
 
