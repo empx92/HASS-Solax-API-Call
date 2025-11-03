@@ -1,73 +1,51 @@
-
+"""Coordinator for SolaX Cloud Multi."""
 from __future__ import annotations
 
-import asyncio
-import json
-import logging
 from datetime import timedelta
-from typing import Any
+import logging
 
-from aiohttp import ClientError
+from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
-from homeassistant.config_entries import ConfigEntry
-from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
-from .const import (
-    DOMAIN,
-    API_URL,
-    API_TIMEOUT,
-    DEFAULT_SCAN_INTERVAL,
-    CONF_TOKEN,
-    CONF_DEVICES,
-    CONF_SCAN_INTERVAL,
-    KEYS,
-)
+from .const import DOMAIN, CONF_TOKEN, CONF_DEVICES, CONF_WIFI_SN, CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL, API_URL, API_TIMEOUT
+import aiohttp
 
 _LOGGER = logging.getLogger(__name__)
 
-class SolaxCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]] ]):
-    """Fetch data for multiple SolaX devices in parallel."""
+class SolaxDataUpdateCoordinator(DataUpdateCoordinator):
+    """Fetch data from SolaX API."""
 
     def __init__(self, hass: HomeAssistant, entry: ConfigEntry) -> None:
         self.entry = entry
-        scan_interval = int(entry.options.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL))
-        super().__init__(
-            hass,
-            logger=_LOGGER,
-            name=f"{DOMAIN}_coordinator",
-            update_interval=timedelta(seconds=scan_interval),
-        )
-        self._token = entry.data[CONF_TOKEN]
+        update_interval = timedelta(seconds=entry.options.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL))
+        super().__init__(hass, _LOGGER, name=DOMAIN, update_interval=update_interval)
 
-    @property
-    def devices(self) -> list[dict[str, Any]]:
-        return list(self.entry.options.get(CONF_DEVICES, []))
+    async def _async_update_data(self):
+        token = self.entry.data[CONF_TOKEN]
+        devices = self.entry.options.get(CONF_DEVICES, [])
+        wifi_sns = [d[CONF_WIFI_SN] for d in devices]
 
-    async def _async_update_data(self) -> dict[str, dict[str, Any]]:
-        session = async_get_clientsession(self.hass)
-        headers = {"Content-Type": "application/json", "tokenId": self._token}
-
-        async def fetch_one(wifi_sn: str) -> tuple[str, dict[str, Any] | None]:
-            payload = json.dumps({"wifiSn": wifi_sn})
-            for attempt in range(3):
-                try:
-                    async with session.post(API_URL, headers=headers, data=payload, timeout=API_TIMEOUT) as resp:
-                        data = await resp.json(content_type=None)
-                        if isinstance(data, dict) and data.get("success") and "result" in data:
-                            res = data.get("result") or {}
-                            filtered = {k: res.get(k) for k in KEYS}
-                            return wifi_sn, filtered
-                except (ClientError, asyncio.TimeoutError):
-                    pass
-                await asyncio.sleep(1 + attempt)
-            raise UpdateFailed(f"Failed to fetch after retries: {wifi_sn}")
-
-        devices = [d.get("wifi_sn") for d in self.devices if d.get("wifi_sn")]
-        if not devices:
+        if not wifi_sns:
             return {}
-        results: dict[str, dict[str, Any]] = {}
-        fetched = await asyncio.gather(*(fetch_one(sn) for sn in devices))
-        for wifi_sn, result in fetched:
-            results[wifi_sn] = result or {}
-        return results
+
+        async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=API_TIMEOUT)) as session:
+            tasks = [self._fetch_device(session, token, sn) for sn in wifi_sns]
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+
+        data = {}
+        for sn, result in zip(wifi_sns, results):
+            if isinstance(result, Exception):
+                _LOGGER.error(f"Error fetching {sn}: {result}")
+                data[sn] = {}
+            else:
+                data[sn] = result.get("result", {})
+        return data
+
+    async def _fetch_device(self, session: aiohttp.ClientSession, token: str, wifi_sn: str):
+        headers = {"tokenId": token}
+        payload = {"wifiSn": wifi_sn}
+        async with session.post(API_URL, headers=headers, json=payload) as resp:
+            if resp.status != 200:
+                raise Exception(f"HTTP {resp.status}")
+            return await resp.json()
