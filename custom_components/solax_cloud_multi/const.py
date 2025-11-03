@@ -1,9 +1,9 @@
-from datetime import timedelta
-
 DOMAIN = "solax_cloud_multi"
 
 CONF_TOKEN = "token_id"
-CONF_DEVICES = "devices"          # list of dicts: {wifi_sn,name,battery_kwh}
+CONF_DEVICES = "devices"
+CONF_WIFI_SN = "wifi_sn"
+CONF_NAME = "name"
 CONF_SCAN_INTERVAL = "scan_interval"
 CONF_WIFI_SN = "wifi_sn"           # Neu: Definierte Konstante (war fehlend)
 CONF_NAME = "name"                 # Neu: Für Name-Dropdown

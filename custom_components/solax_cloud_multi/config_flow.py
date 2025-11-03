@@ -48,23 +48,35 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
 
             if "remove_device" in user_input:
                 name_to_remove = user_input["remove_device"]
-                devices = [d for d in devices if d[CONF_NAME] != name_to_remove]
+                devices = [d for d in devices if d.get(CONF_NAME) != name_to_remove]
 
             user_input[CONF_DEVICES] = devices
             return self.async_create_entry(title="", data=user_input)
 
         devices = self.config_entry.options.get(CONF_DEVICES, [])
-        device_names = [d[CONF_NAME] for d in devices]
+        device_names = {
+            d[CONF_NAME]: d[CONF_NAME]
+            for d in devices
+            if d.get(CONF_NAME)
+        }
 
-        schema = vol.Schema({
+        schema_dict: dict[Any, Any] = {
             vol.Optional(CONF_USE_PREFIX, default=False): bool,
-            vol.Optional(CONF_SCAN_INTERVAL, default=DEFAULT_SCAN_INTERVAL): vol.All(vol.Coerce(int), vol.Range(min=10, max=300)),
-            vol.Optional("add_device"): vol.Schema({
-                vol.Required(CONF_WIFI_SN): str,
-                vol.Required(CONF_NAME): str,
-            }),
-            vol.Optional("remove_device"): vol.In(device_names) if device_names else vol.NoDefault,
-        })
+            vol.Optional(CONF_SCAN_INTERVAL, default=DEFAULT_SCAN_INTERVAL): vol.All(
+                vol.Coerce(int), vol.Range(min=10, max=300)
+            ),
+            vol.Optional("add_device"): vol.Schema(
+                {
+                    vol.Required(CONF_WIFI_SN): str,
+                    vol.Required(CONF_NAME): str,
+                }
+            ),
+        }
+
+        if device_names:
+            schema_dict[vol.Optional("remove_device")] = vol.In(device_names)
+
+        schema = vol.Schema(schema_dict)
 
         return self.async_show_form(
             step_id="init",

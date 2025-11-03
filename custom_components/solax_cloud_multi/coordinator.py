@@ -1,14 +1,15 @@
 """Coordinator for SolaX Cloud Multi."""
 from __future__ import annotations
 
-from datetime import timedelta
 import asyncio
-import aiohttp
 import logging
+from datetime import timedelta
+
+import aiohttp
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
+from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 
 from .const import (
     DOMAIN,

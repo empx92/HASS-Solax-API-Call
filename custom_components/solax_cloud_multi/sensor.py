@@ -19,6 +19,7 @@ from .const import (
     DOMAIN,
     CONF_DEVICES,
     CONF_WIFI_SN,
+    CONF_NAME,
     CONF_USE_PREFIX,
     SENSOR_MAP,
 )
@@ -40,13 +41,30 @@ async def async_setup_entry(
         prefix = f"{name} " if use_prefix else ""
 
         for key, config in SENSOR_MAP.items():
+            device_class_name = config.get("device_class")
+            device_class = None
+            if isinstance(device_class_name, str):
+                device_class = getattr(
+                    SensorDeviceClass, device_class_name.upper(), None
+                )
+
+            state_class = None
+            if device_class == SensorDeviceClass.POWER:
+                state_class = SensorStateClass.MEASUREMENT
+
+            icon = config.get("icon")
+            if not icon and key == "export_power":
+                icon = "mdi:export"
+            elif not icon and key == "import_power":
+                icon = "mdi:import"
+
             description = SensorEntityDescription(
                 key=key,
                 name=f"{prefix}{config['name']}".strip(),
-                native_unit_of_measurement=config["unit"],
-                device_class=getattr(SensorDeviceClass, config["device_class"].upper(), None),
-                state_class=SensorStateClass.MEASUREMENT if "power" in config["device_class"] else None,
-                icon="mdi:export" if key == "export_power" else "mdi:import" if key == "import_power" else None,
+                native_unit_of_measurement=config.get("unit"),
+                device_class=device_class,
+                state_class=state_class,
+                icon=icon,
             )
             entities.append(SolaxSensor(coordinator, wifi_sn, description))
 
@@ -63,11 +81,15 @@ class SolaxSensor(CoordinatorEntity, SensorEntity):
     @property
     def native_value(self):
         data = self.coordinator.data.get(self._wifi_sn, {})
-        feedin = data.get("feedinpower", 0)
+        feedin = data.get("feedinpower")
 
         if self.entity_description.key == "export_power":
+            if feedin is None:
+                return None
             return feedin if feedin > 0 else 0
         if self.entity_description.key == "import_power":
+            if feedin is None:
+                return None
             return abs(feedin) if feedin < 0 else 0
 
         return data.get(self.entity_description.key)
