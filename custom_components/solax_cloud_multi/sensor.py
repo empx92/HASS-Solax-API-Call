@@ -1,19 +1,19 @@
 """Sensor platform for SolaX Cloud Multi."""
-from __future__ import annotations
-
-from typing import Any
-
 from homeassistant.components.sensor import (
     SensorEntity,
     SensorEntityDescription,
     SensorDeviceClass,
     SensorStateClass,
 )
-from homeassistant.const import POWER_WATT, PERCENTAGE, TEMP_CELSIUS
-from homeassistant.core import HomeAssistant
-from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import (
+    POWER_WATT,
+    PERCENTAGE,
+    TEMP_CELSIUS,
+)
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
+from homeassistant.core import HomeAssistant
+from homeassistant.config_entries import ConfigEntry
 
 from .const import (
     DOMAIN,
@@ -27,8 +27,7 @@ async def async_setup_entry(
     hass: HomeAssistant,
     entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
-) -> None:
-    """Set up sensors."""
+):
     coordinator = hass.data[DOMAIN][entry.entry_id]
     devices = entry.options.get(CONF_DEVICES, [])
     use_prefix = entry.options.get(CONF_USE_PREFIX, False)
@@ -37,7 +36,7 @@ async def async_setup_entry(
 
     for device in devices:
         wifi_sn = device[CONF_WIFI_SN]
-        name = device.get("name", "Unknown")
+        name = device.get(CONF_NAME, "Unknown")
         prefix = f"{name} " if use_prefix else ""
 
         for key, config in SENSOR_MAP.items():
@@ -55,16 +54,14 @@ async def async_setup_entry(
 
 
 class SolaxSensor(CoordinatorEntity, SensorEntity):
-    """SolaX Sensor – berechnet Import/Export aus feedinpower."""
-
-    def __init__(self, coordinator, wifi_sn: str, description: SensorEntityDescription):
+    def __init__(self, coordinator, wifi_sn, description):
         super().__init__(coordinator)
         self._wifi_sn = wifi_sn
         self.entity_description = description
         self._attr_unique_id = f"{DOMAIN}_{wifi_sn}_{description.key}"
 
     @property
-    def native_value(self) -> float | None:
+    def native_value(self):
         data = self.coordinator.data.get(self._wifi_sn, {})
         feedin = data.get("feedinpower", 0)
 
