@@ -15,7 +15,6 @@ DEFAULT_SCAN_INTERVAL = 60  # seconds
 MIN_SCAN_INTERVAL = 10
 MAX_SCAN_INTERVAL = 300
 
-API_URL = "https://www.solaxcloud.com/api/v2/dataAccess/realtimeInfo/get"
 API_TIMEOUT = 20
 
 SENSOR_MAP: dict[str, dict[str, str | None]] = {

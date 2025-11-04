@@ -20,7 +20,7 @@ from .const import (
     CONF_WIFI_SN,
     CONF_SCAN_INTERVAL,
     DEFAULT_SCAN_INTERVAL,
-    API_URL,
+    API_ENDPOINTS,
     API_TIMEOUT,
     NUMERIC_SENSOR_KEYS,
 )
