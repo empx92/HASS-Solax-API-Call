@@ -1,1 +1,1 @@
-Install via HACS custom repository or copy to /config/custom_components.
+Install via HACS custom repositories or copy to /config/custom_components.
