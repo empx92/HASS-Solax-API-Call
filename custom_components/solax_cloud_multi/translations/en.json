@@ -32,7 +32,7 @@
       "remove_device": {
         "title": "Remove device",
         "data": {
-          "wifi_sn": "WiFi SN"
+          "wifi_sn": "Device"
         }
       },
       "set_options": {
@@ -41,6 +41,9 @@
           "scan_interval": "Scan interval (sec)"
         }
       }
+    },
+    "abort": {
+      "no_devices": "There are no configured devices to remove."
     }
   }
 }

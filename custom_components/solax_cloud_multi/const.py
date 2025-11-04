@@ -29,6 +29,8 @@ SENSOR_MAP = {
     "acpower": {"name": "AC Power", "unit": "W", "device_class": "power"},
     "feedinpower": {"name": "Feed-in Power", "unit": "W", "device_class": "power"},
     "batPower": {"name": "Battery Power", "unit": "W", "device_class": "power"},
+    "export": {"name": "Grid Export Power", "unit": "W", "device_class": "power"},
+    "import": {"name": "Grid Import Power", "unit": "W", "device_class": "power"},
     "soc": {"name": "Battery SoC", "unit": "%", "device_class": "battery"},
     "battemper": {"name": "Battery Temperature", "unit": "°C", "device_class": "temperature"},
     "batcycle": {"name": "Battery Cycles", "unit": None, "device_class": None},
