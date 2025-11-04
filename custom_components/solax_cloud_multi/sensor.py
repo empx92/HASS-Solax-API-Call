@@ -75,7 +75,8 @@ class SolaxSensor(CoordinatorEntity, SensorEntity):
 
     @property
     def native_value(self):
-        data = self.coordinator.data.get(self._wifi_sn, {})
+        coordinator_data = self.coordinator.data or {}
+        data = coordinator_data.get(self._wifi_sn) or {}
         feedin = data.get("feedinpower")
 
         if self.entity_description.key == "export_power":
