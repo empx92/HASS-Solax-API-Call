@@ -32,7 +32,7 @@
       "remove_device": {
         "title": "Ger\u00e4t entfernen",
         "data": {
-          "wifi_sn": "WiFi-SN"
+          "wifi_sn": "Ger\u00e4t"
         }
       },
       "set_options": {
@@ -41,6 +41,9 @@
           "scan_interval": "Abfrage-Intervall (Sek.)"
         }
       }
+    },
+    "abort": {
+      "no_devices": "Es sind keine Ger\u00e4te zum Entfernen vorhanden."
     }
   }
 }

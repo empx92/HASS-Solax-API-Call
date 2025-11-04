@@ -25,8 +25,6 @@ DEVICE_ADD_SCHEMA = vol.Schema(
     }
 )
 
-REMOVE_SCHEMA = vol.Schema({vol.Required("wifi_sn"): str})
-
 OPTIONS_SCHEMA = vol.Schema(
     {vol.Optional(CONF_SCAN_INTERVAL, default=DEFAULT_SCAN_INTERVAL): vol.All(int, vol.Range(min=5, max=300))}
 )
@@ -79,10 +77,31 @@ class SolaxOptionsFlow(config_entries.OptionsFlow):
         return self.async_show_form(step_id="add_device", data_schema=DEVICE_ADD_SCHEMA)
 
     async def async_step_remove_device(self, user_input=None):
+        devices = self._devices
+        if not devices:
+            return self.async_abort(reason="no_devices")
+
+        choices = {
+            d["wifi_sn"]: f"{d.get('name') or d['wifi_sn']} ({d['wifi_sn']})"
+            for d in devices
+            if d.get("wifi_sn")
+        }
+
+        if not choices:
+            return self.async_abort(reason="no_devices")
+
+        schema = vol.Schema(
+            {
+                vol.Required(
+                    "wifi_sn", default=next(iter(choices))
+                ): vol.In(choices)
+            }
+        )
+
         if user_input is not None:
             wifi = user_input["wifi_sn"]
             devices = [d for d in self._devices if d.get("wifi_sn") != wifi]
             options = dict(self.entry.options)
             options[CONF_DEVICES] = devices
             return self.async_create_entry(title="", data=options)
-        return self.async_show_form(step_id="remove_device", data_schema=REMOVE_SCHEMA)
+        return self.async_show_form(step_id="remove_device", data_schema=schema)

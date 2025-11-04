@@ -59,6 +59,28 @@ class SolaxCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]] ]):
                         if isinstance(data, dict) and data.get("success") and "result" in data:
                             res = data.get("result") or {}
                             filtered = {k: res.get(k) for k in KEYS}
+                            feed = res.get("feedinpower")
+                            export_power: float | None
+                            import_power: float | None
+                            if feed is None:
+                                export_power = None
+                                import_power = None
+                            else:
+                                try:
+                                    feed_val = float(feed)
+                                except (TypeError, ValueError):
+                                    feed_val = 0.0
+                                if feed_val > 0:
+                                    export_power = feed_val
+                                    import_power = 0.0
+                                elif feed_val < 0:
+                                    export_power = 0.0
+                                    import_power = abs(feed_val)
+                                else:
+                                    export_power = 0.0
+                                    import_power = 0.0
+                            filtered["export"] = export_power
+                            filtered["import"] = import_power
                             return wifi_sn, filtered
                         _LOGGER.warning("Bad response for %s (try %s): %s", wifi_sn, attempt+1, data)
                 except (ClientError, asyncio.TimeoutError) as exc:
