@@ -15,6 +15,8 @@ from .const import (
     CONF_SCAN_INTERVAL,
     CONF_USE_PREFIX,
     DEFAULT_SCAN_INTERVAL,
+    MIN_SCAN_INTERVAL,
+    MAX_SCAN_INTERVAL,
 )
 
 class SolaxCloudMultiConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
@@ -39,33 +41,73 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
         self.config_entry = config_entry
 
     async def async_step_init(self, user_input=None):
+        existing_options = dict(self.config_entry.options)
+        existing_devices: list[dict[str, Any]] = []
+        for device in existing_options.get(CONF_DEVICES, []):
+            device_copy = dict(device)
+            wifi_sn = device_copy.get(CONF_WIFI_SN)
+            if wifi_sn:
+                device_copy[CONF_WIFI_SN] = wifi_sn.strip().upper()
+            existing_devices.append(device_copy)
+
         if user_input is not None:
-            devices = self.config_entry.options.get(CONF_DEVICES, [])
+            add_device = user_input.pop("add_device", None)
+            remove_device = user_input.pop("remove_device", None)
 
-            if "add_device" in user_input:
-                devices.append({
-                    CONF_WIFI_SN: user_input["add_device"][CONF_WIFI_SN],
-                    CONF_NAME: user_input["add_device"][CONF_NAME],
-                })
+            devices = existing_devices
 
-            if "remove_device" in user_input:
-                name_to_remove = user_input["remove_device"]
-                devices = [d for d in devices if d.get(CONF_NAME) != name_to_remove]
+            if add_device:
+                wifi_sn = add_device[CONF_WIFI_SN].strip().upper()
+                name = add_device[CONF_NAME].strip() or wifi_sn
+                existing = next(
+                    (device for device in devices if device.get(CONF_WIFI_SN) == wifi_sn),
+                    None,
+                )
+                if existing:
+                    existing[CONF_NAME] = name
+                else:
+                    devices.append({CONF_WIFI_SN: wifi_sn, CONF_NAME: name})
 
-            user_input[CONF_DEVICES] = devices
-            return self.async_create_entry(title="", data=user_input)
+            if remove_device:
+                devices = [
+                    device
+                    for device in devices
+                    if device.get(CONF_WIFI_SN) != remove_device
+                ]
 
-        devices = self.config_entry.options.get(CONF_DEVICES, [])
-        device_names = {
-            d[CONF_NAME]: d[CONF_NAME]
-            for d in devices
-            if d.get(CONF_NAME)
-        }
+            options: dict[str, Any] = dict(existing_options)
+            options[CONF_USE_PREFIX] = user_input.get(
+                CONF_USE_PREFIX,
+                existing_options.get(CONF_USE_PREFIX, False),
+            )
+            options[CONF_SCAN_INTERVAL] = user_input.get(
+                CONF_SCAN_INTERVAL,
+                existing_options.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL),
+            )
+            options[CONF_DEVICES] = devices
+
+            return self.async_create_entry(title="", data=options)
+
+        device_labels: dict[str, str] = {}
+        for device in existing_devices:
+            wifi_sn = device.get(CONF_WIFI_SN)
+            if not wifi_sn:
+                continue
+            label = device.get(CONF_NAME) or wifi_sn
+            device_labels[wifi_sn] = label
+        removal_choices = list(device_labels)
 
         schema_dict: dict[Any, Any] = {
-            vol.Optional(CONF_USE_PREFIX, default=False): bool,
-            vol.Optional(CONF_SCAN_INTERVAL, default=DEFAULT_SCAN_INTERVAL): vol.All(
-                vol.Coerce(int), vol.Range(min=10, max=300)
+            vol.Optional(
+                CONF_USE_PREFIX,
+                default=existing_options.get(CONF_USE_PREFIX, False),
+            ): bool,
+            vol.Optional(
+                CONF_SCAN_INTERVAL,
+                default=existing_options.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL),
+            ): vol.All(
+                vol.Coerce(int),
+                vol.Range(min=MIN_SCAN_INTERVAL, max=MAX_SCAN_INTERVAL),
             ),
             vol.Optional("add_device"): vol.Schema(
                 {
@@ -75,13 +117,18 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
             ),
         }
 
-        if device_names:
-            schema_dict[vol.Optional("remove_device")] = vol.In(device_names)
+        if removal_choices:
+            schema_dict[vol.Optional("remove_device")] = vol.In(removal_choices)
 
         schema = vol.Schema(schema_dict)
+
+        device_list = ", ".join(
+            f"{device_labels[sn]} ({sn})" if device_labels[sn] != sn else sn
+            for sn in removal_choices
+        )
 
         return self.async_show_form(
             step_id="init",
             data_schema=schema,
-            description_placeholders={"devices": ", ".join(device_names) or "Keine"},
+            description_placeholders={"devices": device_list or "Keine"},
         )

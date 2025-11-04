@@ -1,17 +1,23 @@
 """Sensor platform for SolaX Cloud Multi."""
+from __future__ import annotations
+
+from typing import Any
+
 from homeassistant.components.sensor import (
+    SensorDeviceClass,
     SensorEntity,
     SensorEntityDescription,
-    SensorDeviceClass,
     SensorStateClass,
 )
+from homeassistant.config_entries import ConfigEntry
+from homeassistant.core import HomeAssistant
+from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
-from homeassistant.core import HomeAssistant
-from homeassistant.config_entries import ConfigEntry
 
 from .const import (
     DOMAIN,
+    MANUFACTURER,
     CONF_DEVICES,
     CONF_WIFI_SN,
     CONF_NAME,
@@ -25,14 +31,18 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ):
     coordinator = hass.data[DOMAIN][entry.entry_id]
-    devices = entry.options.get(CONF_DEVICES, [])
+    devices = entry.options.get(CONF_DEVICES)
+    if devices is None:
+        devices = entry.data.get(CONF_DEVICES, [])
     use_prefix = entry.options.get(CONF_USE_PREFIX, False)
 
     entities = []
 
     for device in devices:
-        wifi_sn = device[CONF_WIFI_SN]
-        name = device.get(CONF_NAME, "Unknown")
+        wifi_sn = device.get(CONF_WIFI_SN)
+        if not wifi_sn:
+            continue
+        name = device.get(CONF_NAME) or wifi_sn
         prefix = f"{name} " if use_prefix else ""
 
         for key, config in SENSOR_MAP.items():
@@ -61,31 +71,74 @@ async def async_setup_entry(
                 state_class=state_class,
                 icon=icon,
             )
-            entities.append(SolaxSensor(coordinator, wifi_sn, description))
+            entities.append(
+                SolaxSensor(
+                    coordinator,
+                    entry_id=entry.entry_id,
+                    wifi_sn=wifi_sn,
+                    device_name=name,
+                    description=description,
+                )
+            )
 
     async_add_entities(entities)
 
 
 class SolaxSensor(CoordinatorEntity, SensorEntity):
-    def __init__(self, coordinator, wifi_sn, description):
+    """Representation of a SolaX Cloud sensor."""
+
+    def __init__(
+        self,
+        coordinator,
+        *,
+        entry_id: str,
+        wifi_sn: str,
+        device_name: str,
+        description: SensorEntityDescription,
+    ) -> None:
         super().__init__(coordinator)
         self._wifi_sn = wifi_sn
+        self._device_name = device_name
         self.entity_description = description
-        self._attr_unique_id = f"{DOMAIN}_{wifi_sn}_{description.key}"
+        self._attr_unique_id = f"{DOMAIN}_{entry_id}_{wifi_sn}_{description.key}"
 
     @property
-    def native_value(self):
-        coordinator_data = self.coordinator.data or {}
-        data = coordinator_data.get(self._wifi_sn) or {}
+    def available(self) -> bool:
+        return bool(self._device_data()) and super().available
+
+    @property
+    def device_info(self) -> DeviceInfo:
+        data = self._device_data()
+        model = data.get("inverterSn") or data.get("model")
+        serial = data.get("sn") or self._wifi_sn
+        sw_version = data.get("uploadTime")
+
+        return DeviceInfo(
+            identifiers={(DOMAIN, self._wifi_sn)},
+            manufacturer=MANUFACTURER,
+            name=self._device_name,
+            model=model,
+            serial_number=serial,
+            sw_version=sw_version,
+        )
+
+    @property
+    def native_value(self) -> Any:
+        data = self._device_data()
         feedin = data.get("feedinpower")
 
         if self.entity_description.key == "export_power":
             if feedin is None:
                 return None
             return feedin if feedin > 0 else 0
+
         if self.entity_description.key == "import_power":
             if feedin is None:
                 return None
             return abs(feedin) if feedin < 0 else 0
 
         return data.get(self.entity_description.key)
+
+    def _device_data(self) -> dict[str, Any]:
+        coordinator_data = self.coordinator.data or {}
+        return coordinator_data.get(self._wifi_sn, {})
