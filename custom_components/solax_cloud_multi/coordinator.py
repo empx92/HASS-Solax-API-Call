@@ -52,8 +52,11 @@ class SolaxDataUpdateCoordinator(DataUpdateCoordinator):
         return data
 
     async def _fetch_device(self, session, token, wifi_sn):
-        headers = {"tokenId": token}
-        payload = {"wifiSn": wifi_sn}
+        headers = {
+            "tokenId": token,
+            "Content-Type": "application/json",
+        }
+        payload = {"sn": wifi_sn}
         async with session.post(API_URL, headers=headers, json=payload) as resp:
             if resp.status != 200:
                 raise Exception(f"HTTP {resp.status}")
