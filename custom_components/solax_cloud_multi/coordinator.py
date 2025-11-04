@@ -47,10 +47,7 @@ class SolaxDataUpdateCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]
             return {}
 
         session = async_get_clientsession(self.hass)
-        tasks = [
-            self._fetch_device(session, token, wifi_sn)
-            for wifi_sn in wifi_sns
-        ]
+        tasks = [self._fetch_device(session, token, wifi_sn) for wifi_sn in wifi_sns]
         results = await asyncio.gather(*tasks, return_exceptions=True)
 
         data: dict[str, dict[str, Any]] = {}
@@ -60,77 +57,40 @@ class SolaxDataUpdateCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]
                 data[wifi_sn] = {}
                 continue
 
-            data[wifi_sn] = self._normalize_result(wifi_sn, result)
+            data[wifi_sn] = self._normalize_result(result)
 
         return data
 
-    async def _fetch_device(
-        self, session, token: str, wifi_sn: str
-    ) -> dict[str, Any]:
-        last_error: UpdateFailed | None = None
+    async def _fetch_device(self, session, token: str, wifi_sn: str) -> dict[str, Any]:
+        headers = {
+            "tokenId": token,
+            "Content-Type": "application/json",
+        }
+        payload = {"sn": wifi_sn}
 
-        for method, url, mode in API_ENDPOINTS:
-            request_kwargs: dict[str, Any] = {
-                "timeout": ClientTimeout(total=API_TIMEOUT),
-                "headers": {"Accept": "application/json"},
-            }
+        try:
+            async with session.post(
+                API_URL,
+                headers=headers,
+                json=payload,
+                timeout=ClientTimeout(total=API_TIMEOUT),
+            ) as response:
+                response.raise_for_status()
+                data: dict[str, Any] = await response.json()
+        except (asyncio.TimeoutError, ClientError, ContentTypeError, ValueError) as err:
+            raise UpdateFailed(f"Network error fetching {wifi_sn}: {err}") from err
 
-            if mode == "params":
-                request_kwargs["params"] = {"tokenId": token, "sn": wifi_sn}
-            elif mode == "form":
-                request_kwargs["data"] = {"tokenId": token, "sn": wifi_sn}
-                request_kwargs["headers"]["Content-Type"] = (
-                    "application/x-www-form-urlencoded"
-                )
-            else:  # json
-                request_kwargs["json"] = {"sn": wifi_sn}
-                request_kwargs["headers"]["tokenId"] = token
+        if not isinstance(data, dict):
+            raise UpdateFailed(f"Malformed response for {wifi_sn}: {data}")
 
-            try:
-                async with session.request(method, url, **request_kwargs) as response:
-                    response.raise_for_status()
-                    data: dict[str, Any] = await response.json(content_type=None)
-            except (
-                asyncio.TimeoutError,
-                ClientError,
-                ContentTypeError,
-                ValueError,
-            ) as err:
-                last_error = UpdateFailed(
-                    f"Network error fetching {wifi_sn} via {url}: {err}"
-                )
-                continue
+        if not data.get("success", True):
+            message = data.get("exception") or data.get("message") or "unknown error"
+            raise UpdateFailed(f"API error for {wifi_sn}: {message}")
 
-            if not isinstance(data, dict):
-                last_error = UpdateFailed(
-                    f"Malformed response for {wifi_sn} via {url}: {data}"
-                )
-                continue
+        return data
 
-            if not data.get("success", True):
-                message = (
-                    data.get("exception")
-                    or data.get("message")
-                    or "unknown error"
-                )
-                if "param invalid" in message.lower():
-                    last_error = UpdateFailed(
-                        f"API error for {wifi_sn}: {message}"
-                    )
-                    continue
-                raise UpdateFailed(f"API error for {wifi_sn}: {message}")
-
-            return data
-
-        if last_error is not None:
-            raise last_error
-
-        raise UpdateFailed(f"No valid response for {wifi_sn}")
-
-    def _normalize_result(self, wifi_sn: str, response: dict[str, Any]) -> dict[str, Any]:
+    def _normalize_result(self, response: dict[str, Any]) -> dict[str, Any]:
         result: dict[str, Any] | None = response.get("result")
-        if result is None and isinstance(response.get("data"), dict):
-            result = response["data"]
         if not isinstance(result, dict):
             return {}
 
@@ -142,9 +102,6 @@ class SolaxDataUpdateCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]
         for meta_key in ("sn", "inverterSn", "uploadTime"):
             if meta_key not in normalized and meta_key in response:
                 normalized[meta_key] = response[meta_key]
-
-        normalized.setdefault("sn", response.get("sn") or response.get("inverterSn") or wifi_sn)
-        normalized.setdefault("wifi_sn", wifi_sn)
 
         return normalized
 

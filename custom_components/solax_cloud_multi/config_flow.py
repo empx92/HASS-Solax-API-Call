@@ -43,43 +43,30 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
     async def async_step_init(self, user_input=None):
         existing_options = dict(self.config_entry.options)
         existing_devices: list[dict[str, Any]] = []
-        seen_wifi_sn: set[str] = set()
         for device in existing_options.get(CONF_DEVICES, []):
-            wifi_sn_raw = str(device.get(CONF_WIFI_SN, "")).strip().upper()
-            if not wifi_sn_raw or wifi_sn_raw in seen_wifi_sn:
-                continue
-            seen_wifi_sn.add(wifi_sn_raw)
-            name = str(device.get(CONF_NAME, "")).strip()
-            existing_devices.append(
-                {
-                    CONF_WIFI_SN: wifi_sn_raw,
-                    CONF_NAME: name or wifi_sn_raw,
-                }
-            )
-
-        if existing_devices:
-            existing_options[CONF_DEVICES] = existing_devices
+            device_copy = dict(device)
+            wifi_sn = device_copy.get(CONF_WIFI_SN)
+            if wifi_sn:
+                device_copy[CONF_WIFI_SN] = wifi_sn.strip().upper()
+            existing_devices.append(device_copy)
 
         if user_input is not None:
             add_device = user_input.pop("add_device", None)
             remove_device = user_input.pop("remove_device", None)
 
-            devices = list(existing_devices)
+            devices = existing_devices
 
             if add_device:
                 wifi_sn = add_device[CONF_WIFI_SN].strip().upper()
-                name = add_device[CONF_NAME].strip()
-                if not wifi_sn:
-                    wifi_sn = add_device[CONF_WIFI_SN].strip().upper()
-                display_name = name or wifi_sn
+                name = add_device[CONF_NAME].strip() or wifi_sn
                 existing = next(
                     (device for device in devices if device.get(CONF_WIFI_SN) == wifi_sn),
                     None,
                 )
                 if existing:
-                    existing[CONF_NAME] = display_name
+                    existing[CONF_NAME] = name
                 else:
-                    devices.append({CONF_WIFI_SN: wifi_sn, CONF_NAME: display_name})
+                    devices.append({CONF_WIFI_SN: wifi_sn, CONF_NAME: name})
 
             if remove_device:
                 devices = [

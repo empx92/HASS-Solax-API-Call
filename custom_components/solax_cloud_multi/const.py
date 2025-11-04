@@ -17,19 +17,6 @@ MAX_SCAN_INTERVAL = 300
 
 API_TIMEOUT = 20
 
-API_ENDPOINTS: tuple[tuple[str, str, str], ...] = (
-    (
-        "GET",
-        "https://www.solaxcloud.com:9443/proxy/api/getRealtimeInfo.do",
-        "params",
-    ),
-    (
-        "POST",
-        "https://www.solaxcloud.com/api/v2/dataAccess/realtimeInfo/get",
-        "json",
-    ),
-)
-
 SENSOR_MAP: dict[str, dict[str, str | None]] = {
     "acpower": {"name": "AC Power", "unit": "W", "device_class": "power"},
     "feedinpower": {"name": "Feed-in Power", "unit": "W", "device_class": "power"},

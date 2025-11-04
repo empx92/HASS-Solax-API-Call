@@ -34,24 +34,15 @@ async def async_setup_entry(
     devices = entry.options.get(CONF_DEVICES)
     if devices is None:
         devices = entry.data.get(CONF_DEVICES, [])
-
-    normalized_devices: list[dict[str, Any]] = []
-    seen_wifi_sn: set[str] = set()
-    for device in devices:
-        wifi_sn_raw = str(device.get(CONF_WIFI_SN, "")).strip().upper()
-        if not wifi_sn_raw or wifi_sn_raw in seen_wifi_sn:
-            continue
-        seen_wifi_sn.add(wifi_sn_raw)
-        name = str(device.get(CONF_NAME, "")).strip() or wifi_sn_raw
-        normalized_devices.append({CONF_WIFI_SN: wifi_sn_raw, CONF_NAME: name})
-
     use_prefix = entry.options.get(CONF_USE_PREFIX, False)
 
     entities = []
 
-    for device in normalized_devices:
-        wifi_sn = device[CONF_WIFI_SN]
-        name = device[CONF_NAME]
+    for device in devices:
+        wifi_sn = device.get(CONF_WIFI_SN)
+        if not wifi_sn:
+            continue
+        name = device.get(CONF_NAME) or wifi_sn
         prefix = f"{name} " if use_prefix else ""
 
         for key, config in SENSOR_MAP.items():
