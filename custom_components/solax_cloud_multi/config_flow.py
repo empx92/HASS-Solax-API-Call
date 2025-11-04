@@ -1,134 +1,86 @@
-"""Config flow for SolaX Cloud Multi."""
+
+from __future__ import annotations
+
 from typing import Any
 
 import voluptuous as vol
 from homeassistant import config_entries
-from homeassistant.data_entry_flow import FlowResult
-from homeassistant.config_entries import ConfigEntry
+from homeassistant.core import callback
 
 from .const import (
     DOMAIN,
     CONF_TOKEN,
     CONF_DEVICES,
-    CONF_WIFI_SN,
-    CONF_NAME,
     CONF_SCAN_INTERVAL,
-    CONF_USE_PREFIX,
     DEFAULT_SCAN_INTERVAL,
-    MIN_SCAN_INTERVAL,
-    MAX_SCAN_INTERVAL,
 )
 
-class SolaxCloudMultiConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
+STEP_USER_SCHEMA = vol.Schema({vol.Required(CONF_TOKEN): str})
+
+DEVICE_ADD_SCHEMA = vol.Schema(
+    {
+        vol.Required("wifi_sn"): str,
+        vol.Optional("name"): str,
+        vol.Optional("battery_kwh", default=10.0): vol.Coerce(float),
+    }
+)
+
+REMOVE_SCHEMA = vol.Schema({vol.Required("wifi_sn"): str})
+
+OPTIONS_SCHEMA = vol.Schema(
+    {vol.Optional(CONF_SCAN_INTERVAL, default=DEFAULT_SCAN_INTERVAL): vol.All(int, vol.Range(min=5, max=300))}
+)
+
+class SolaxConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     VERSION = 1
 
-    async def async_step_user(self, user_input=None):
-        if user_input is not None:
-            await self.async_set_unique_id(user_input[CONF_TOKEN])
-            self._abort_if_unique_id_configured()
-            return self.async_create_entry(title="SolaX Cloud (Multi)", data=user_input)
-
-        data_schema = vol.Schema({vol.Required(CONF_TOKEN): str})
-        return self.async_show_form(step_id="user", data_schema=data_schema)
+    async def async_step_user(self, user_input: dict[str, Any] | None = None):
+        if user_input is None:
+            return self.async_show_form(step_id="user", data_schema=STEP_USER_SCHEMA)
+        return self.async_create_entry(title="SolaX Cloud (Multi)", data={CONF_TOKEN: user_input[CONF_TOKEN]})
 
     @staticmethod
+    @callback
     def async_get_options_flow(config_entry):
-        return OptionsFlowHandler(config_entry)
+        return SolaxOptionsFlow(config_entry)
 
+class SolaxOptionsFlow(config_entries.OptionsFlow):
+    def __init__(self, entry: config_entries.ConfigEntry):
+        self.entry = entry
 
-class OptionsFlowHandler(config_entries.OptionsFlow):
-    def __init__(self, config_entry: ConfigEntry):
-        self.config_entry = config_entry
+    @property
+    def _devices(self) -> list[dict[str, Any]]:
+        return list(self.entry.options.get(CONF_DEVICES, []))
 
     async def async_step_init(self, user_input=None):
-        existing_options = dict(self.config_entry.options)
-        existing_devices: list[dict[str, Any]] = []
-        for device in existing_options.get(CONF_DEVICES, []):
-            device_copy = dict(device)
-            wifi_sn = device_copy.get(CONF_WIFI_SN)
-            if wifi_sn:
-                device_copy[CONF_WIFI_SN] = wifi_sn.strip().upper()
-            existing_devices.append(device_copy)
-
-        if user_input is not None:
-            add_device = user_input.pop("add_device", None)
-            remove_device = user_input.pop("remove_device", None)
-
-            devices = existing_devices
-
-            if add_device:
-                wifi_sn = add_device[CONF_WIFI_SN].strip().upper()
-                name = add_device[CONF_NAME].strip() or wifi_sn
-                existing = next(
-                    (device for device in devices if device.get(CONF_WIFI_SN) == wifi_sn),
-                    None,
-                )
-                if existing:
-                    existing[CONF_NAME] = name
-                else:
-                    devices.append({CONF_WIFI_SN: wifi_sn, CONF_NAME: name})
-
-            if remove_device:
-                devices = [
-                    device
-                    for device in devices
-                    if device.get(CONF_WIFI_SN) != remove_device
-                ]
-
-            options: dict[str, Any] = dict(existing_options)
-            options[CONF_USE_PREFIX] = user_input.get(
-                CONF_USE_PREFIX,
-                existing_options.get(CONF_USE_PREFIX, False),
-            )
-            options[CONF_SCAN_INTERVAL] = user_input.get(
-                CONF_SCAN_INTERVAL,
-                existing_options.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL),
-            )
-            options[CONF_DEVICES] = devices
-
-            return self.async_create_entry(title="", data=options)
-
-        device_labels: dict[str, str] = {}
-        for device in existing_devices:
-            wifi_sn = device.get(CONF_WIFI_SN)
-            if not wifi_sn:
-                continue
-            label = device.get(CONF_NAME) or wifi_sn
-            device_labels[wifi_sn] = label
-        removal_choices = list(device_labels)
-
-        schema_dict: dict[Any, Any] = {
-            vol.Optional(
-                CONF_USE_PREFIX,
-                default=existing_options.get(CONF_USE_PREFIX, False),
-            ): bool,
-            vol.Optional(
-                CONF_SCAN_INTERVAL,
-                default=existing_options.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL),
-            ): vol.All(
-                vol.Coerce(int),
-                vol.Range(min=MIN_SCAN_INTERVAL, max=MAX_SCAN_INTERVAL),
-            ),
-            vol.Optional("add_device"): vol.Schema(
-                {
-                    vol.Required(CONF_WIFI_SN): str,
-                    vol.Required(CONF_NAME): str,
-                }
-            ),
-        }
-
-        if removal_choices:
-            schema_dict[vol.Optional("remove_device")] = vol.In(removal_choices)
-
-        schema = vol.Schema(schema_dict)
-
-        device_list = ", ".join(
-            f"{device_labels[sn]} ({sn})" if device_labels[sn] != sn else sn
-            for sn in removal_choices
-        )
-
-        return self.async_show_form(
+        return self.async_show_menu(
             step_id="init",
-            data_schema=schema,
-            description_placeholders={"devices": device_list or "Keine"},
+            menu_options=["add_device", "remove_device", "set_options"],
         )
+
+    async def async_step_set_options(self, user_input=None):
+        if user_input is not None:
+            options = dict(self.entry.options)
+            options[CONF_SCAN_INTERVAL] = user_input[CONF_SCAN_INTERVAL]
+            return self.async_create_entry(title="", data=options)
+        return self.async_show_form(step_id="set_options", data_schema=OPTIONS_SCHEMA)
+
+    async def async_step_add_device(self, user_input=None):
+        if user_input is not None:
+            devices = self._devices
+            devices.append(
+                {"wifi_sn": user_input["wifi_sn"], "name": user_input.get("name") or user_input["wifi_sn"], "battery_kwh": user_input["battery_kwh"]}
+            )
+            options = dict(self.entry.options)
+            options[CONF_DEVICES] = devices
+            return self.async_create_entry(title="", data=options)
+        return self.async_show_form(step_id="add_device", data_schema=DEVICE_ADD_SCHEMA)
+
+    async def async_step_remove_device(self, user_input=None):
+        if user_input is not None:
+            wifi = user_input["wifi_sn"]
+            devices = [d for d in self._devices if d.get("wifi_sn") != wifi]
+            options = dict(self.entry.options)
+            options[CONF_DEVICES] = devices
+            return self.async_create_entry(title="", data=options)
+        return self.async_show_form(step_id="remove_device", data_schema=REMOVE_SCHEMA)

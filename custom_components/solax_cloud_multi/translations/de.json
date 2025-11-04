@@ -16,26 +16,23 @@
       "init": {
         "title": "SolaX: Optionen",
         "menu_options": {
-          "add_device": "Gerät hinzufügen",
-          "remove_device": "Gerät entfernen",
+          "add_device": "Ger\u00e4t hinzuf\u00fcgen",
+          "remove_device": "Ger\u00e4t entfernen",
           "set_options": "Polling & Optionen"
-        },
-        "data": {
-          "remove_device": "Gerät entfernen"
         }
       },
       "add_device": {
-        "title": "Gerät hinzufügen",
+        "title": "Ger\u00e4t hinzuf\u00fcgen",
         "data": {
           "wifi_sn": "WiFi-SN",
           "name": "Anzeigename",
-          "battery_kwh": "Batteriegröße (kWh)"
+          "battery_kwh": "Batteriegr\u00f6\u00dfe (kWh)"
         }
       },
       "remove_device": {
-        "title": "Gerät entfernen",
+        "title": "Ger\u00e4t entfernen",
         "data": {
-          "name": "Gerätename"
+          "wifi_sn": "WiFi-SN"
         }
       },
       "set_options": {

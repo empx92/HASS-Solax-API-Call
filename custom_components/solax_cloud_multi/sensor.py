@@ -1,144 +1,153 @@
-"""Sensor platform for SolaX Cloud Multi."""
+
 from __future__ import annotations
 
 from typing import Any
 
-from homeassistant.components.sensor import (
-    SensorDeviceClass,
-    SensorEntity,
-    SensorEntityDescription,
-    SensorStateClass,
-)
-from homeassistant.config_entries import ConfigEntry
+from homeassistant.components.sensor import SensorEntity, SensorDeviceClass
+from homeassistant.const import UnitOfPower, UnitOfTemperature, PERCENTAGE
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.device_registry import DeviceInfo
+from homeassistant.config_entries import ConfigEntry
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import (
-    DOMAIN,
-    MANUFACTURER,
-    CONF_DEVICES,
-    CONF_WIFI_SN,
-    CONF_NAME,
-    CONF_USE_PREFIX,
-    SENSOR_MAP,
-)
+from .const import DOMAIN, SENSOR_MAP
+from .coordinator import SolaxCoordinator
 
-async def async_setup_entry(
-    hass: HomeAssistant,
-    entry: ConfigEntry,
-    async_add_entities: AddEntitiesCallback,
-):
-    coordinator = hass.data[DOMAIN][entry.entry_id]
-    devices = entry.options.get(CONF_DEVICES)
-    if devices is None:
-        devices = entry.data.get(CONF_DEVICES, [])
-    use_prefix = entry.options.get(CONF_USE_PREFIX, False)
+PARALLEL_UPDATES = 0
 
-    entities = []
+CHARGE_THRESHOLD_W = 50.0
+DISCHARGE_THRESHOLD_W = -50.0
+RESERVE_SOC = 10.0
 
-    for device in devices:
-        wifi_sn = device.get(CONF_WIFI_SN)
-        if not wifi_sn:
-            continue
-        name = device.get(CONF_NAME) or wifi_sn
-        prefix = f"{name} " if use_prefix else ""
+async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback):
+    coordinator: SolaxCoordinator = hass.data[DOMAIN][entry.entry_id]
+    entities: list[SensorEntity] = []
 
-        for key, config in SENSOR_MAP.items():
-            device_class_name = config.get("device_class")
-            device_class = None
-            if isinstance(device_class_name, str):
-                device_class = getattr(
-                    SensorDeviceClass, device_class_name.upper(), None
-                )
+    for device in coordinator.devices:
+        wifi_sn = device["wifi_sn"]
+        name = device.get("name") or wifi_sn
+        battery_kwh = float(device.get("battery_kwh", 0))
 
-            state_class = None
-            if device_class == SensorDeviceClass.POWER:
-                state_class = SensorStateClass.MEASUREMENT
+        for key, meta in SENSOR_MAP.items():
+            entities.append(SolaxValueSensor(coordinator, wifi_sn, name, key, meta))
 
-            icon = config.get("icon")
-            if not icon and key == "export_power":
-                icon = "mdi:export"
-            elif not icon and key == "import_power":
-                icon = "mdi:import"
+        entities.append(SolaxEtaMinutesSensor(coordinator, wifi_sn, name, battery_kwh))
+        entities.append(SolaxEtaToFullMinutesSensor(coordinator, wifi_sn, name, battery_kwh))
+        entities.append(SolaxEtaTextSensor(coordinator, wifi_sn, name, battery_kwh))
 
-            description = SensorEntityDescription(
-                key=key,
-                name=f"{prefix}{config['name']}".strip(),
-                native_unit_of_measurement=config.get("unit"),
-                device_class=device_class,
-                state_class=state_class,
-                icon=icon,
-            )
-            entities.append(
-                SolaxSensor(
-                    coordinator,
-                    entry_id=entry.entry_id,
-                    wifi_sn=wifi_sn,
-                    device_name=name,
-                    description=description,
-                )
-            )
+    async_add_entities(entities, update_before_add=True)
 
-    async_add_entities(entities)
-
-
-class SolaxSensor(CoordinatorEntity, SensorEntity):
-    """Representation of a SolaX Cloud sensor."""
-
-    def __init__(
-        self,
-        coordinator,
-        *,
-        entry_id: str,
-        wifi_sn: str,
-        device_name: str,
-        description: SensorEntityDescription,
-    ) -> None:
+class SolaxBase(CoordinatorEntity[SolaxCoordinator], SensorEntity):
+    def __init__(self, coordinator: SolaxCoordinator, wifi_sn: str, base_name: str, kind: str) -> None:
         super().__init__(coordinator)
         self._wifi_sn = wifi_sn
-        self._device_name = device_name
-        self.entity_description = description
-        self._attr_unique_id = f"{DOMAIN}_{entry_id}_{wifi_sn}_{description.key}"
+        self._base_name = base_name
+        self._kind = kind
 
     @property
-    def available(self) -> bool:
-        return bool(self._device_data()) and super().available
+    def device_info(self):
+        return {
+            "identifiers": {(DOMAIN, self._wifi_sn)},
+            "name": f"SolaX {self._base_name}",
+            "manufacturer": "SolaX",
+            "model": "Cloud",
+        }
+
+    def _val(self, key: str):
+        return (self.coordinator.data.get(self._wifi_sn) or {}).get(key)
+
+class SolaxValueSensor(SolaxBase):
+    def __init__(self, coordinator, wifi_sn, base_name, key, meta):
+        super().__init__(coordinator, wifi_sn, base_name, key)
+        self._attr_name = meta['name']
+        self._attr_unique_id = f"{wifi_sn}_{key}"
+        unit = meta["unit"]
+        if unit == "W":
+            self._attr_native_unit_of_measurement = UnitOfPower.WATT
+            self._attr_device_class = SensorDeviceClass.POWER
+        elif unit == "°C":
+            self._attr_native_unit_of_measurement = UnitOfTemperature.CELSIUS
+            self._attr_device_class = SensorDeviceClass.TEMPERATURE
+        elif unit == "%":
+            self._attr_native_unit_of_measurement = PERCENTAGE
+            self._attr_device_class = SensorDeviceClass.BATTERY
+        else:
+            self._attr_native_unit_of_measurement = unit
+            self._attr_device_class = None
 
     @property
-    def device_info(self) -> DeviceInfo:
-        data = self._device_data()
-        model = data.get("inverterSn") or data.get("model")
-        serial = data.get("sn") or self._wifi_sn
-        sw_version = data.get("uploadTime")
+    def native_value(self):
+        return self._val(self._kind)
 
-        return DeviceInfo(
-            identifiers={(DOMAIN, self._wifi_sn)},
-            manufacturer=MANUFACTURER,
-            name=self._device_name,
-            model=model,
-            serial_number=serial,
-            sw_version=sw_version,
-        )
+class SolaxEtaMinutesSensor(SolaxBase):
+    _attr_native_unit_of_measurement = "min"
+
+    def __init__(self, coordinator, wifi_sn, base_name, battery_kwh: float):
+        super().__init__(coordinator, wifi_sn, base_name, "eta_minutes")
+        self._battery_kwh = battery_kwh
+        self._attr_name = "Battery ETA (min)"
+        self._attr_unique_id = f"{wifi_sn}_eta_minutes"
 
     @property
-    def native_value(self) -> Any:
-        data = self._device_data()
-        feedin = data.get("feedinpower")
+    def native_value(self):
+        soc = float(self._val("soc") or 0.0)
+        p = float(self._val("batPower") or 0.0)
+        cap = float(self._battery_kwh or 0.0)
+        if cap <= 0.0:
+            return None
+        if p > CHARGE_THRESHOLD_W and soc < 100.0:
+            fehl_kwh = cap * (100.0 - soc) / 100.0
+            hrs = fehl_kwh / (p / 1000.0)
+        elif p < DISCHARGE_THRESHOLD_W and soc > RESERVE_SOC:
+            nutz_kwh = cap * (soc - RESERVE_SOC) / 100.0
+            hrs = nutz_kwh / (abs(p) / 1000.0)
+        else:
+            return None
+        return max(0, round(hrs * 60))
 
-        if self.entity_description.key == "export_power":
-            if feedin is None:
-                return None
-            return feedin if feedin > 0 else 0
+class SolaxEtaToFullMinutesSensor(SolaxBase):
+    _attr_native_unit_of_measurement = "min"
+    _attr_device_class = SensorDeviceClass.DURATION
 
-        if self.entity_description.key == "import_power":
-            if feedin is None:
-                return None
-            return abs(feedin) if feedin < 0 else 0
+    def __init__(self, coordinator, wifi_sn, base_name, battery_kwh: float):
+        super().__init__(coordinator, wifi_sn, base_name, "eta_to_full_minutes")
+        self._battery_kwh = battery_kwh
+        self._attr_name = "Battery ETA to Full (min)"
+        self._attr_unique_id = f"{wifi_sn}_eta_to_full_min"
 
-        return data.get(self.entity_description.key)
+    @property
+    def native_value(self):
+        soc = float(self._val("soc") or 0.0)
+        p = float(self._val("batPower") or 0.0)
+        cap = float(self._battery_kwh or 0.0)
+        if cap <= 0.0 or p <= CHARGE_THRESHOLD_W or soc >= 100.0:
+            return None
+        fehl_kwh = cap * (100.0 - soc) / 100.0
+        mins = max(0, round((fehl_kwh / (p / 1000.0)) * 60))
+        return mins
 
-    def _device_data(self) -> dict[str, Any]:
-        coordinator_data = self.coordinator.data or {}
-        return coordinator_data.get(self._wifi_sn, {})
+class SolaxEtaTextSensor(SolaxBase):
+    def __init__(self, coordinator, wifi_sn, base_name, battery_kwh: float):
+        super().__init__(coordinator, wifi_sn, base_name, "eta_text")
+        self._battery_kwh = battery_kwh
+        self._attr_name = "Battery ETA"
+        self._attr_unique_id = f"{wifi_sn}_eta_text"
+
+    @property
+    def native_value(self):
+        soc = float(self._val("soc") or 0.0)
+        p = float(self._val("batPower") or 0.0)
+        cap = float(self._battery_kwh or 0.0)
+        if cap <= 0.0:
+            return "—"
+        if p > CHARGE_THRESHOLD_W and soc < 100.0:
+            fehl_kwh = cap * (100.0 - soc) / 100.0
+            mins = max(0, round((fehl_kwh / (p / 1000.0)) * 60))
+            h, m = divmod(mins, 60)
+            return f"Fertig in {h}h {m:02d}m"
+        elif p < DISCHARGE_THRESHOLD_W and soc > RESERVE_SOC:
+            nutz_kwh = cap * (soc - RESERVE_SOC) / 100.0
+            mins = max(0, round((nutz_kwh / (abs(p) / 1000.0)) * 60))
+            h, m = divmod(mins, 60)
+            return f"Leer in {h}h {m:02d}m"
+        return "—"

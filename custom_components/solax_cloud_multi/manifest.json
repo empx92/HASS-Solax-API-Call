@@ -1,14 +1,16 @@
 {
   "domain": "solax_cloud_multi",
   "name": "SolaX Cloud (Multi)",
-  "version": "1.4.0",
-  "logo": "images/logo.png",
+  "version": "1.0.4",
   "documentation": "https://github.com/empx92/HASS-Solax-API-Call",
-  "issue_tracker": "https://github.com/empx92/HASS-Solax-API-Call/issues",
-  "dependencies": [],
-  "codeowners": ["@empx92"],
   "requirements": [],
-  "config_flow": true,
+  "codeowners": [
+    "@empx92"
+  ],
+  "integration_type": "hub",
   "iot_class": "cloud_polling",
-  "integration_type": "hub"
+  "config_flow": true,
+  "issue_tracker": "https://github.com/empx92/HASS-Solax-API-Call/issues",
+  "icon": "mdi:solar-power",
+  "loggers": []
 }
